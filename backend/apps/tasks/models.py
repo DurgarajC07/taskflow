@@ -954,3 +954,316 @@ class TaskActivity(BaseModel):
 
     def __str__(self):
         return f"{self.activity_type} on {self.task.task_key} by {self.user.email if self.user else 'System'}"
+
+
+# ============================================================================
+# WORKFLOW MODELS
+# ============================================================================
+
+
+class Workflow(OrganizationOwnedModel, SoftDeleteModel):
+    """
+    Workflow defines custom task status flows for projects.
+    Organizations can create multiple workflows for different project types.
+    """
+
+    # Basic Information
+    name = models.CharField(max_length=255, help_text="Workflow name")
+    description = models.TextField(blank=True, help_text="Workflow description")
+
+    # Scope
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="workflows",
+        help_text="Project-specific workflow (null for organization-level)",
+    )
+
+    # Settings
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Default workflow for new projects",
+    )
+    is_system = models.BooleanField(
+        default=False,
+        help_text="System workflow (cannot be deleted)",
+    )
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether workflow is active",
+    )
+
+    # Metadata
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_workflows",
+        help_text="User who created the workflow",
+    )
+
+    # Custom managers
+    objects = OrganizationManager()
+    all_objects = SoftDeleteManager()
+
+    class Meta:
+        db_table = "workflows"
+        ordering = ["name"]
+        unique_together = [["organization", "name"]]
+        indexes = [
+            models.Index(fields=["organization", "is_active"]),
+            models.Index(fields=["project"]),
+            models.Index(fields=["is_default"]),
+        ]
+        verbose_name = "Workflow"
+        verbose_name_plural = "Workflows"
+
+    def __str__(self):
+        return self.name
+
+
+class WorkflowState(BaseModel):
+    """
+    Workflow state represents a status in a workflow.
+    States define the possible statuses tasks can have within a workflow.
+    """
+
+    # State Category
+    class Category(models.TextChoices):
+        TODO = "todo", "To Do"
+        IN_PROGRESS = "in_progress", "In Progress"
+        DONE = "done", "Done"
+        CANCELLED = "cancelled", "Cancelled"
+
+    # Workflow relationship
+    workflow = models.ForeignKey(
+        Workflow,
+        on_delete=models.CASCADE,
+        related_name="states",
+        help_text="Workflow this state belongs to",
+    )
+
+    # Basic Information
+    name = models.CharField(max_length=100, help_text="State name")
+    description = models.TextField(blank=True, help_text="State description")
+
+    # Classification
+    category = models.CharField(
+        max_length=20,
+        choices=Category.choices,
+        help_text="State category",
+    )
+
+    # Appearance
+    color = models.CharField(
+        max_length=7,
+        default="#6B7280",
+        validators=[validate_hex_color],
+        help_text="State color (hex)",
+    )
+
+    # Settings
+    is_initial = models.BooleanField(
+        default=False,
+        help_text="Initial state for new tasks",
+    )
+    is_final = models.BooleanField(
+        default=False,
+        help_text="Final/completed state",
+    )
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Display order in UI",
+    )
+
+    class Meta:
+        db_table = "workflow_states"
+        ordering = ["workflow", "display_order", "name"]
+        unique_together = [["workflow", "name"]]
+        indexes = [
+            models.Index(fields=["workflow", "display_order"]),
+            models.Index(fields=["workflow", "is_initial"]),
+            models.Index(fields=["workflow", "is_final"]),
+        ]
+        verbose_name = "Workflow State"
+        verbose_name_plural = "Workflow States"
+
+    def __str__(self):
+        return f"{self.workflow.name}: {self.name}"
+
+
+class WorkflowTransition(BaseModel):
+    """
+    Workflow transition defines allowed state changes.
+    Transitions control which states tasks can move between.
+    """
+
+    # Workflow relationship
+    workflow = models.ForeignKey(
+        Workflow,
+        on_delete=models.CASCADE,
+        related_name="transitions",
+        help_text="Workflow this transition belongs to",
+    )
+
+    # State relationships
+    from_state = models.ForeignKey(
+        WorkflowState,
+        on_delete=models.CASCADE,
+        related_name="outgoing_transitions",
+        help_text="Source state",
+    )
+    to_state = models.ForeignKey(
+        WorkflowState,
+        on_delete=models.CASCADE,
+        related_name="incoming_transitions",
+        help_text="Target state",
+    )
+
+    # Basic Information
+    name = models.CharField(
+        max_length=100,
+        help_text="Transition name (e.g., 'Start Progress', 'Complete')",
+    )
+    description = models.TextField(blank=True, help_text="Transition description")
+
+    # Conditions
+    conditions = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Conditions that must be met for transition",
+    )
+
+    # Actions
+    actions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Actions to perform on transition",
+    )
+
+    # Settings
+    requires_comment = models.BooleanField(
+        default=False,
+        help_text="Whether transition requires a comment",
+    )
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Display order in UI",
+    )
+
+    class Meta:
+        db_table = "workflow_transitions"
+        ordering = ["workflow", "display_order"]
+        unique_together = [["workflow", "from_state", "to_state"]]
+        indexes = [
+            models.Index(fields=["workflow"]),
+            models.Index(fields=["from_state"]),
+            models.Index(fields=["to_state"]),
+        ]
+        verbose_name = "Workflow Transition"
+        verbose_name_plural = "Workflow Transitions"
+
+    def __str__(self):
+        return f"{self.from_state.name} → {self.to_state.name}"
+
+
+class WorkflowRule(BaseModel):
+    """
+    Workflow rule defines automation actions.
+    Rules trigger actions based on events and conditions.
+    """
+
+    # Trigger Types
+    class TriggerType(models.TextChoices):
+        STATUS_CHANGED = "status_changed", "Status Changed"
+        TASK_CREATED = "task_created", "Task Created"
+        TASK_UPDATED = "task_updated", "Task Updated"
+        TASK_ASSIGNED = "task_assigned", "Task Assigned"
+        COMMENT_ADDED = "comment_added", "Comment Added"
+        ATTACHMENT_ADDED = "attachment_added", "Attachment Added"
+        DUE_DATE_APPROACHING = "due_date_approaching", "Due Date Approaching"
+        DUE_DATE_PASSED = "due_date_passed", "Due Date Passed"
+
+    # Workflow relationship
+    workflow = models.ForeignKey(
+        Workflow,
+        on_delete=models.CASCADE,
+        related_name="rules",
+        help_text="Workflow this rule belongs to",
+    )
+
+    # Basic Information
+    name = models.CharField(max_length=255, help_text="Rule name")
+    description = models.TextField(blank=True, help_text="Rule description")
+
+    # Trigger
+    trigger_type = models.CharField(
+        max_length=30,
+        choices=TriggerType.choices,
+        help_text="What triggers this rule",
+    )
+    trigger_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Trigger-specific configuration",
+    )
+
+    # Conditions
+    conditions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Conditions that must be met",
+    )
+
+    # Actions
+    actions = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Actions to perform when triggered",
+    )
+
+    # Settings
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Whether rule is active",
+    )
+    priority = models.IntegerField(
+        default=0,
+        help_text="Execution priority (higher = earlier)",
+    )
+
+    # Metadata
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_workflow_rules",
+        help_text="User who created the rule",
+    )
+
+    # Statistics
+    execution_count = models.IntegerField(
+        default=0,
+        help_text="Number of times rule has been executed",
+    )
+    last_executed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Last execution timestamp",
+    )
+
+    class Meta:
+        db_table = "workflow_rules"
+        ordering = ["-priority", "name"]
+        indexes = [
+            models.Index(fields=["workflow", "is_active"]),
+            models.Index(fields=["trigger_type"]),
+            models.Index(fields=["-priority"]),
+        ]
+        verbose_name = "Workflow Rule"
+        verbose_name_plural = "Workflow Rules"
+
+    def __str__(self):
+        return f"{self.workflow.name}: {self.name}"

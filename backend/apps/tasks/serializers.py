@@ -1,6 +1,6 @@
 """
-Team, Project, and Task Serializers
-API serialization for Team, TeamMember, Project, ProjectMember, Task, TaskComment, and TaskAttachment models.
+Team, Project, Task, and Workflow Serializers
+API serialization for Team, TeamMember, Project, ProjectMember, Task, TaskComment, TaskAttachment, and Workflow models.
 """
 
 from rest_framework import serializers
@@ -14,6 +14,10 @@ from apps.tasks.models import (
     TaskComment,
     TaskAttachment,
     TaskActivity,
+    Workflow,
+    WorkflowState,
+    WorkflowTransition,
+    WorkflowRule,
 )
 
 User = get_user_model()
@@ -1098,3 +1102,332 @@ class BulkUpdateSerializer(serializers.Serializer):
                 "At least one field (status, priority, or assignee_id) must be provided"
             )
         return data
+
+
+# ============================================================================
+# WORKFLOW SERIALIZERS
+# ============================================================================
+
+
+class WorkflowStateListSerializer(serializers.ModelSerializer):
+    """Lightweight workflow state serializer for lists"""
+
+    class Meta:
+        model = WorkflowState
+        fields = [
+            "id",
+            "name",
+            "category",
+            "color",
+            "is_initial",
+            "is_final",
+            "display_order",
+        ]
+
+
+class WorkflowStateSerializer(serializers.ModelSerializer):
+    """Full workflow state serializer"""
+
+    class Meta:
+        model = WorkflowState
+        fields = [
+            "id",
+            "workflow",
+            "name",
+            "description",
+            "category",
+            "color",
+            "is_initial",
+            "is_final",
+            "display_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class WorkflowStateCreateSerializer(serializers.ModelSerializer):
+    """Workflow state creation serializer"""
+
+    class Meta:
+        model = WorkflowState
+        fields = [
+            "name",
+            "description",
+            "category",
+            "color",
+            "is_initial",
+            "is_final",
+            "display_order",
+        ]
+
+
+class WorkflowTransitionListSerializer(serializers.ModelSerializer):
+    """Lightweight workflow transition serializer"""
+
+    from_state_name = serializers.CharField(source="from_state.name", read_only=True)
+    to_state_name = serializers.CharField(source="to_state.name", read_only=True)
+    from_state_color = serializers.CharField(source="from_state.color", read_only=True)
+    to_state_color = serializers.CharField(source="to_state.color", read_only=True)
+
+    class Meta:
+        model = WorkflowTransition
+        fields = [
+            "id",
+            "name",
+            "from_state",
+            "to_state",
+            "from_state_name",
+            "to_state_name",
+            "from_state_color",
+            "to_state_color",
+            "requires_comment",
+            "display_order",
+        ]
+
+
+class WorkflowTransitionSerializer(serializers.ModelSerializer):
+    """Full workflow transition serializer"""
+
+    from_state_name = serializers.CharField(source="from_state.name", read_only=True)
+    to_state_name = serializers.CharField(source="to_state.name", read_only=True)
+
+    class Meta:
+        model = WorkflowTransition
+        fields = [
+            "id",
+            "workflow",
+            "from_state",
+            "to_state",
+            "from_state_name",
+            "to_state_name",
+            "name",
+            "description",
+            "conditions",
+            "actions",
+            "requires_comment",
+            "display_order",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class WorkflowTransitionCreateSerializer(serializers.ModelSerializer):
+    """Workflow transition creation serializer"""
+
+    class Meta:
+        model = WorkflowTransition
+        fields = [
+            "from_state",
+            "to_state",
+            "name",
+            "description",
+            "conditions",
+            "actions",
+            "requires_comment",
+            "display_order",
+        ]
+
+
+class WorkflowRuleListSerializer(serializers.ModelSerializer):
+    """Lightweight workflow rule serializer"""
+
+    created_by_email = serializers.CharField(
+        source="created_by.email", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = WorkflowRule
+        fields = [
+            "id",
+            "name",
+            "trigger_type",
+            "is_active",
+            "priority",
+            "created_by_email",
+            "execution_count",
+            "last_executed_at",
+        ]
+
+
+class WorkflowRuleSerializer(serializers.ModelSerializer):
+    """Full workflow rule serializer"""
+
+    created_by_email = serializers.CharField(
+        source="created_by.email", read_only=True, allow_null=True
+    )
+
+    class Meta:
+        model = WorkflowRule
+        fields = [
+            "id",
+            "workflow",
+            "name",
+            "description",
+            "trigger_type",
+            "trigger_config",
+            "conditions",
+            "actions",
+            "is_active",
+            "priority",
+            "created_by",
+            "created_by_email",
+            "execution_count",
+            "last_executed_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "created_by",
+            "execution_count",
+            "last_executed_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class WorkflowRuleCreateSerializer(serializers.ModelSerializer):
+    """Workflow rule creation serializer"""
+
+    class Meta:
+        model = WorkflowRule
+        fields = [
+            "name",
+            "description",
+            "trigger_type",
+            "trigger_config",
+            "conditions",
+            "actions",
+            "is_active",
+            "priority",
+        ]
+
+
+class WorkflowListSerializer(serializers.ModelSerializer):
+    """Lightweight workflow serializer for lists"""
+
+    project_name = serializers.CharField(
+        source="project.name", read_only=True, allow_null=True
+    )
+    created_by_email = serializers.CharField(
+        source="created_by.email", read_only=True, allow_null=True
+    )
+    state_count = serializers.SerializerMethodField()
+    transition_count = serializers.SerializerMethodField()
+    rule_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Workflow
+        fields = [
+            "id",
+            "name",
+            "description",
+            "project",
+            "project_name",
+            "is_default",
+            "is_system",
+            "is_active",
+            "created_by_email",
+            "state_count",
+            "transition_count",
+            "rule_count",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_state_count(self, obj):
+        """Get state count"""
+        return obj.states.count()
+
+    def get_transition_count(self, obj):
+        """Get transition count"""
+        return obj.transitions.count()
+
+    def get_rule_count(self, obj):
+        """Get rule count"""
+        return obj.rules.count()
+
+
+class WorkflowSerializer(serializers.ModelSerializer):
+    """Full workflow serializer with nested states and transitions"""
+
+    project_name = serializers.CharField(
+        source="project.name", read_only=True, allow_null=True
+    )
+    created_by_email = serializers.CharField(
+        source="created_by.email", read_only=True, allow_null=True
+    )
+    states = WorkflowStateListSerializer(many=True, read_only=True)
+    transitions = WorkflowTransitionListSerializer(many=True, read_only=True)
+    rules = WorkflowRuleListSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Workflow
+        fields = [
+            "id",
+            "organization",
+            "name",
+            "description",
+            "project",
+            "project_name",
+            "is_default",
+            "is_system",
+            "is_active",
+            "created_by",
+            "created_by_email",
+            "states",
+            "transitions",
+            "rules",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "organization",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class WorkflowCreateSerializer(serializers.ModelSerializer):
+    """Workflow creation serializer"""
+
+    class Meta:
+        model = Workflow
+        fields = [
+            "name",
+            "description",
+            "project",
+            "is_default",
+            "is_active",
+        ]
+
+
+class WorkflowUpdateSerializer(serializers.ModelSerializer):
+    """Workflow update serializer"""
+
+    class Meta:
+        model = Workflow
+        fields = [
+            "name",
+            "description",
+            "is_default",
+            "is_active",
+        ]
+
+
+class WorkflowDuplicateSerializer(serializers.Serializer):
+    """Workflow duplication serializer"""
+
+    name = serializers.CharField(max_length=255)
+
+
+class ValidateTransitionSerializer(serializers.Serializer):
+    """Validate transition serializer"""
+
+    from_state_id = serializers.UUIDField()
+    to_state_id = serializers.UUIDField()
+    comment = serializers.CharField(required=False, allow_blank=True)

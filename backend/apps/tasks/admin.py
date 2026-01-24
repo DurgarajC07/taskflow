@@ -1,6 +1,6 @@
 """
-Team, Project, and Task Admin Configuration
-Django admin interface for Team, Project, and Task models.
+Team, Project, Task, and Workflow Admin Configuration
+Django admin interface for Team, Project, Task, and Workflow models.
 """
 
 from django.contrib import admin
@@ -13,6 +13,10 @@ from apps.tasks.models import (
     TaskComment,
     TaskAttachment,
     TaskActivity,
+    Workflow,
+    WorkflowState,
+    WorkflowTransition,
+    WorkflowRule,
 )
 
 
@@ -481,3 +485,303 @@ class TaskActivityAdmin(admin.ModelAdmin):
     def has_delete_permission(self, request, obj=None):
         """Prevent deletion"""
         return False
+
+
+# ============================================================================
+# Workflow Admin
+# ============================================================================
+
+
+class WorkflowStateInline(admin.TabularInline):
+    """Inline admin for workflow states"""
+
+    model = WorkflowState
+    extra = 0
+    fields = ["name", "category", "color", "is_initial", "is_final", "display_order"]
+    ordering = ["display_order", "name"]
+
+
+class WorkflowTransitionInline(admin.TabularInline):
+    """Inline admin for workflow transitions"""
+
+    model = WorkflowTransition
+    extra = 0
+    fields = ["name", "from_state", "to_state", "requires_comment", "display_order"]
+    fk_name = "workflow"
+    ordering = ["display_order"]
+
+
+class WorkflowRuleInline(admin.TabularInline):
+    """Inline admin for workflow rules"""
+
+    model = WorkflowRule
+    extra = 0
+    fields = ["name", "trigger_type", "is_active", "priority"]
+    ordering = ["-priority", "name"]
+
+
+@admin.register(Workflow)
+class WorkflowAdmin(admin.ModelAdmin):
+    """Admin interface for Workflow model"""
+
+    list_display = [
+        "name",
+        "organization",
+        "project",
+        "is_default",
+        "is_system",
+        "is_active",
+        "created_by",
+        "state_count",
+        "transition_count",
+        "rule_count",
+        "created_at",
+    ]
+    list_filter = [
+        "is_default",
+        "is_system",
+        "is_active",
+        "created_at",
+        "organization",
+    ]
+    search_fields = ["name", "description", "organization__name", "project__name"]
+    readonly_fields = [
+        "id",
+        "state_count",
+        "transition_count",
+        "rule_count",
+        "created_at",
+        "updated_at",
+    ]
+    inlines = [WorkflowStateInline, WorkflowTransitionInline, WorkflowRuleInline]
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("id", "organization", "name", "description")},
+        ),
+        ("Scope", {"fields": ("project",)}),
+        (
+            "Settings",
+            {
+                "fields": (
+                    "is_default",
+                    "is_system",
+                    "is_active",
+                )
+            },
+        ),
+        ("Metadata", {"fields": ("created_by",)}),
+        (
+            "Statistics",
+            {"fields": ("state_count", "transition_count", "rule_count")},
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def state_count(self, obj):
+        """Get number of states"""
+        return obj.states.count()
+
+    state_count.short_description = "States"
+
+    def transition_count(self, obj):
+        """Get number of transitions"""
+        return obj.transitions.count()
+
+    transition_count.short_description = "Transitions"
+
+    def rule_count(self, obj):
+        """Get number of rules"""
+        return obj.rules.count()
+
+    rule_count.short_description = "Rules"
+
+    def get_queryset(self, request):
+        """Include soft-deleted workflows"""
+        return Workflow.all_objects.all().select_related(
+            "organization", "project", "created_by"
+        )
+
+
+@admin.register(WorkflowState)
+class WorkflowStateAdmin(admin.ModelAdmin):
+    """Admin interface for WorkflowState model"""
+
+    list_display = [
+        "name",
+        "workflow",
+        "category",
+        "color",
+        "is_initial",
+        "is_final",
+        "display_order",
+        "created_at",
+    ]
+    list_filter = ["category", "is_initial", "is_final", "created_at"]
+    search_fields = ["name", "description", "workflow__name"]
+    readonly_fields = ["id", "created_at", "updated_at"]
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("id", "workflow", "name", "description")},
+        ),
+        ("Classification", {"fields": ("category",)}),
+        ("Appearance", {"fields": ("color",)}),
+        (
+            "Settings",
+            {
+                "fields": (
+                    "is_initial",
+                    "is_final",
+                    "display_order",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def get_queryset(self, request):
+        """Optimize query"""
+        return super().get_queryset(request).select_related("workflow")
+
+
+@admin.register(WorkflowTransition)
+class WorkflowTransitionAdmin(admin.ModelAdmin):
+    """Admin interface for WorkflowTransition model"""
+
+    list_display = [
+        "name",
+        "workflow",
+        "from_state",
+        "to_state",
+        "requires_comment",
+        "display_order",
+        "created_at",
+    ]
+    list_filter = ["requires_comment", "created_at"]
+    search_fields = [
+        "name",
+        "description",
+        "workflow__name",
+        "from_state__name",
+        "to_state__name",
+    ]
+    readonly_fields = ["id", "created_at", "updated_at"]
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("id", "workflow", "name", "description")},
+        ),
+        (
+            "State Relationships",
+            {
+                "fields": (
+                    "from_state",
+                    "to_state",
+                )
+            },
+        ),
+        ("Conditions", {"fields": ("conditions",)}),
+        ("Actions", {"fields": ("actions",)}),
+        (
+            "Settings",
+            {
+                "fields": (
+                    "requires_comment",
+                    "display_order",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def get_queryset(self, request):
+        """Optimize query"""
+        return (
+            super()
+            .get_queryset(request)
+            .select_related("workflow", "from_state", "to_state")
+        )
+
+
+@admin.register(WorkflowRule)
+class WorkflowRuleAdmin(admin.ModelAdmin):
+    """Admin interface for WorkflowRule model"""
+
+    list_display = [
+        "name",
+        "workflow",
+        "trigger_type",
+        "is_active",
+        "priority",
+        "execution_count",
+        "last_executed_at",
+        "created_by",
+        "created_at",
+    ]
+    list_filter = ["trigger_type", "is_active", "created_at"]
+    search_fields = ["name", "description", "workflow__name"]
+    readonly_fields = [
+        "id",
+        "execution_count",
+        "last_executed_at",
+        "created_at",
+        "updated_at",
+    ]
+
+    fieldsets = (
+        (
+            "Basic Information",
+            {"fields": ("id", "workflow", "name", "description")},
+        ),
+        (
+            "Trigger",
+            {
+                "fields": (
+                    "trigger_type",
+                    "trigger_config",
+                )
+            },
+        ),
+        ("Conditions", {"fields": ("conditions",)}),
+        ("Actions", {"fields": ("actions",)}),
+        (
+            "Settings",
+            {
+                "fields": (
+                    "is_active",
+                    "priority",
+                )
+            },
+        ),
+        ("Metadata", {"fields": ("created_by",)}),
+        (
+            "Statistics",
+            {
+                "fields": (
+                    "execution_count",
+                    "last_executed_at",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at"), "classes": ("collapse",)},
+        ),
+    )
+
+    def get_queryset(self, request):
+        """Optimize query"""
+        return super().get_queryset(request).select_related("workflow", "created_by")

@@ -1,5 +1,5 @@
 """
-Team, Project, and Task Repositories
+Team, Project, Task, and Workflow Repositories
 """
 
 from .team_repository import TeamRepository
@@ -9,6 +9,12 @@ from .project_member_repository import ProjectMemberRepository
 from .task_repository import TaskRepository
 from .task_comment_repository import TaskCommentRepository
 from .task_attachment_repository import TaskAttachmentRepository
+from .workflow_repository import (
+    WorkflowRepository,
+    WorkflowStateRepository,
+    WorkflowTransitionRepository,
+    WorkflowRuleRepository,
+)
 
 __all__ = [
     "TeamRepository",
@@ -18,4 +24,8 @@ __all__ = [
     "TaskRepository",
     "TaskCommentRepository",
     "TaskAttachmentRepository",
+    "WorkflowRepository",
+    "WorkflowStateRepository",
+    "WorkflowTransitionRepository",
+    "WorkflowRuleRepository",
 ]

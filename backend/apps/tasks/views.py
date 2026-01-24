@@ -1,4 +1,4 @@
-"""
+﻿"""
 Team, Project, and Task Views
 API endpoints for team, project, and task management.
 """
@@ -1611,3 +1611,512 @@ class TaskAttachmentViewSet(viewsets.ModelViewSet):
             project__organization__slug=organization_slug,
             deleted_at__isnull=True,
         )
+
+
+
+# ============================================================================
+# WORKFLOW VIEWS  
+# ============================================================================
+
+
+class WorkflowViewSet(viewsets.ModelViewSet):
+    '''
+    ViewSet for Workflow operations.
+
+    list: Get workflows in organization
+    retrieve: Get workflow details with states and transitions
+    create: Create new workflow
+    update: Update workflow
+    partial_update: Partially update workflow
+    destroy: Delete workflow
+    '''
+
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.tasks.services import WorkflowService
+
+        self.service = WorkflowService()
+
+    def get_organization(self):
+        '''Get organization from URL'''
+        org_slug = self.kwargs.get('organization_slug')
+        return get_object_or_404(Organization, slug=org_slug)
+
+    def get_queryset(self):
+        '''Get workflows for organization'''
+        organization = self.get_organization()
+        from apps.tasks.repositories import WorkflowRepository
+
+        repo = WorkflowRepository()
+        return repo.get_organization_workflows(organization)
+
+    def get_serializer_class(self):
+        '''Get appropriate serializer class'''
+        from apps.tasks.serializers import (
+            WorkflowListSerializer,
+            WorkflowSerializer,
+            WorkflowCreateSerializer,
+            WorkflowUpdateSerializer,
+        )
+
+        if self.action == 'list':
+            return WorkflowListSerializer
+        elif self.action in ['create']:
+            return WorkflowCreateSerializer
+        elif self.action in ['update', 'partial_update']:
+            return WorkflowUpdateSerializer
+        return WorkflowSerializer
+
+    def create(self, request, *args, **kwargs):
+        '''Create new workflow'''
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            organization = self.get_organization()
+            workflow = self.service.create_workflow(
+                organization, request.user, serializer.validated_data
+            )
+
+            from apps.tasks.serializers import WorkflowSerializer
+
+            result_serializer = WorkflowSerializer(workflow)
+            return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        '''Update workflow'''
+        partial = kwargs.pop('partial', False)
+        workflow = self.get_object()
+        serializer = self.get_serializer(workflow, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_workflow = self.service.update_workflow(
+                workflow, request.user, serializer.validated_data
+            )
+
+            from apps.tasks.serializers import WorkflowSerializer
+
+            result_serializer = WorkflowSerializer(updated_workflow)
+            return Response(result_serializer.data)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        '''Delete workflow'''
+        workflow = self.get_object()
+
+        try:
+            self.service.delete_workflow(workflow)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, organization_slug=None, pk=None):
+        '''Duplicate workflow'''
+        workflow = self.get_object()
+
+        from apps.tasks.serializers import WorkflowDuplicateSerializer
+
+        serializer = WorkflowDuplicateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            new_workflow = self.service.duplicate_workflow(
+                workflow, serializer.validated_data['name'], request.user
+            )
+
+            from apps.tasks.serializers import WorkflowSerializer
+
+            result_serializer = WorkflowSerializer(new_workflow)
+            return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def validate_workflow(self, request, organization_slug=None, pk=None):
+        '''Validate workflow configuration'''
+        workflow = self.get_object()
+
+        errors = self.service.validate_workflow(workflow)
+
+        if errors:
+            return Response({'valid': False, 'errors': errors})
+        return Response({'valid': True, 'message': 'Workflow is valid'})
+
+    @action(detail=False, methods=['get'])
+    def default(self, request, organization_slug=None):
+        '''Get default workflow for organization'''
+        organization = self.get_organization()
+
+        from apps.tasks.repositories import WorkflowRepository
+
+        repo = WorkflowRepository()
+        workflow = repo.get_default_workflow(organization)
+
+        if not workflow:
+            return Response(
+                {'error': 'No default workflow found'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        from apps.tasks.serializers import WorkflowSerializer
+
+        serializer = WorkflowSerializer(workflow)
+        return Response(serializer.data)
+
+
+class WorkflowStateViewSet(viewsets.ModelViewSet):
+    '''ViewSet for WorkflowState operations'''
+
+    permission_classes = [IsAuthenticated]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.tasks.services import WorkflowStateService
+
+        self.service = WorkflowStateService()
+
+    def get_workflow(self):
+        '''Get workflow from URL'''
+        organization_slug = self.kwargs.get('organization_slug')
+        workflow_pk = self.kwargs.get('workflow_pk')
+
+        from apps.tasks.models import Workflow
+
+        return get_object_or_404(
+            Workflow,
+            id=workflow_pk,
+            organization__slug=organization_slug,
+            deleted_at__isnull=True,
+        )
+
+    def get_queryset(self):
+        '''Get states for workflow'''
+        workflow = self.get_workflow()
+
+        from apps.tasks.repositories import WorkflowStateRepository
+
+        repo = WorkflowStateRepository()
+        return repo.get_workflow_states(workflow)
+
+    def get_serializer_class(self):
+        '''Get appropriate serializer class'''
+        from apps.tasks.serializers import (
+            WorkflowStateListSerializer,
+            WorkflowStateSerializer,
+            WorkflowStateCreateSerializer,
+        )
+
+        if self.action == 'list':
+            return WorkflowStateListSerializer
+        elif self.action in ['create']:
+            return WorkflowStateCreateSerializer
+        return WorkflowStateSerializer
+
+    def create(self, request, *args, **kwargs):
+        '''Create new state'''
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            workflow = self.get_workflow()
+            state = self.service.create_state(workflow, serializer.validated_data)
+
+            from apps.tasks.serializers import WorkflowStateSerializer
+
+            result_serializer = WorkflowStateSerializer(state)
+            return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        '''Update state'''
+        partial = kwargs.pop('partial', False)
+        state = self.get_object()
+        serializer = self.get_serializer(state, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_state = self.service.update_state(state, serializer.validated_data)
+
+            from apps.tasks.serializers import WorkflowStateSerializer
+
+            result_serializer = WorkflowStateSerializer(updated_state)
+            return Response(result_serializer.data)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        '''Delete state'''
+        state = self.get_object()
+
+        try:
+            self.service.delete_state(state)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def reorder(self, request, organization_slug=None, workflow_pk=None):
+        '''Reorder states'''
+        workflow = self.get_workflow()
+        state_order = request.data.get('state_order', [])
+
+        if not state_order:
+            return Response(
+                {'error': 'state_order is required'}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            self.service.reorder_states(workflow, state_order)
+            return Response({'message': 'States reordered successfully'})
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class WorkflowTransitionViewSet(viewsets.ModelViewSet):
+    '''ViewSet for WorkflowTransition operations'''
+
+    permission_classes = [IsAuthenticated]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.tasks.services import WorkflowTransitionService
+
+        self.service = WorkflowTransitionService()
+
+    def get_workflow(self):
+        '''Get workflow from URL'''
+        organization_slug = self.kwargs.get('organization_slug')
+        workflow_pk = self.kwargs.get('workflow_pk')
+
+        from apps.tasks.models import Workflow
+
+        return get_object_or_404(
+            Workflow,
+            id=workflow_pk,
+            organization__slug=organization_slug,
+            deleted_at__isnull=True,
+        )
+
+    def get_queryset(self):
+        '''Get transitions for workflow'''
+        workflow = self.get_workflow()
+
+        from apps.tasks.repositories import WorkflowTransitionRepository
+
+        repo = WorkflowTransitionRepository()
+        return repo.get_workflow_transitions(workflow)
+
+    def get_serializer_class(self):
+        '''Get appropriate serializer class'''
+        from apps.tasks.serializers import (
+            WorkflowTransitionListSerializer,
+            WorkflowTransitionSerializer,
+            WorkflowTransitionCreateSerializer,
+        )
+
+        if self.action == 'list':
+            return WorkflowTransitionListSerializer
+        elif self.action in ['create']:
+            return WorkflowTransitionCreateSerializer
+        return WorkflowTransitionSerializer
+
+    def create(self, request, *args, **kwargs):
+        '''Create new transition'''
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            workflow = self.get_workflow()
+            transition = self.service.create_transition(
+                workflow, serializer.validated_data
+            )
+
+            from apps.tasks.serializers import WorkflowTransitionSerializer
+
+            result_serializer = WorkflowTransitionSerializer(transition)
+            return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        '''Update transition'''
+        partial = kwargs.pop('partial', False)
+        transition = self.get_object()
+        serializer = self.get_serializer(
+            transition, data=request.data, partial=partial
+        )
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_transition = self.service.update_transition(
+                transition, serializer.validated_data
+            )
+
+            from apps.tasks.serializers import WorkflowTransitionSerializer
+
+            result_serializer = WorkflowTransitionSerializer(updated_transition)
+            return Response(result_serializer.data)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        '''Delete transition'''
+        transition = self.get_object()
+
+        try:
+            self.service.delete_transition(transition)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def validate_transition(self, request, organization_slug=None, workflow_pk=None):
+        '''Validate if a transition is allowed'''
+        from apps.tasks.serializers import ValidateTransitionSerializer
+
+        serializer = ValidateTransitionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from_state_id = serializer.validated_data['from_state_id']
+        to_state_id = serializer.validated_data['to_state_id']
+        comment = serializer.validated_data.get('comment')
+
+        from apps.tasks.models import WorkflowState
+
+        from_state = get_object_or_404(WorkflowState, id=from_state_id)
+        to_state = get_object_or_404(WorkflowState, id=to_state_id)
+
+        task_id = request.data.get('task_id')
+        task = None
+        if task_id:
+            task = get_object_or_404(Task, id=task_id)
+
+        valid, message = self.service.validate_transition(
+            task, from_state, to_state, request.user, comment
+        )
+
+        return Response({'valid': valid, 'message': message})
+
+
+class WorkflowRuleViewSet(viewsets.ModelViewSet):
+    '''ViewSet for WorkflowRule operations'''
+
+    permission_classes = [IsAuthenticated]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.tasks.services import WorkflowRuleService
+
+        self.service = WorkflowRuleService()
+
+    def get_workflow(self):
+        '''Get workflow from URL'''
+        organization_slug = self.kwargs.get('organization_slug')
+        workflow_pk = self.kwargs.get('workflow_pk')
+
+        from apps.tasks.models import Workflow
+
+        return get_object_or_404(
+            Workflow,
+            id=workflow_pk,
+            organization__slug=organization_slug,
+            deleted_at__isnull=True,
+        )
+
+    def get_queryset(self):
+        '''Get rules for workflow'''
+        workflow = self.get_workflow()
+        active_only = self.request.query_params.get('active_only', 'true') == 'true'
+
+        from apps.tasks.repositories import WorkflowRuleRepository
+
+        repo = WorkflowRuleRepository()
+        return repo.get_workflow_rules(workflow, active_only=active_only)
+
+    def get_serializer_class(self):
+        '''Get appropriate serializer class'''
+        from apps.tasks.serializers import (
+            WorkflowRuleListSerializer,
+            WorkflowRuleSerializer,
+            WorkflowRuleCreateSerializer,
+        )
+
+        if self.action == 'list':
+            return WorkflowRuleListSerializer
+        elif self.action in ['create']:
+            return WorkflowRuleCreateSerializer
+        return WorkflowRuleSerializer
+
+    def create(self, request, *args, **kwargs):
+        '''Create new rule'''
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            workflow = self.get_workflow()
+            rule = self.service.create_rule(
+                workflow, request.user, serializer.validated_data
+            )
+
+            from apps.tasks.serializers import WorkflowRuleSerializer
+
+            result_serializer = WorkflowRuleSerializer(rule)
+            return Response(result_serializer.data, status=status.HTTP_201_CREATED)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        '''Update rule'''
+        partial = kwargs.pop('partial', False)
+        rule = self.get_object()
+        serializer = self.get_serializer(rule, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            updated_rule = self.service.update_rule(rule, serializer.validated_data)
+
+            from apps.tasks.serializers import WorkflowRuleSerializer
+
+            result_serializer = WorkflowRuleSerializer(updated_rule)
+            return Response(result_serializer.data)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    def destroy(self, request, *args, **kwargs):
+        '''Delete rule'''
+        rule = self.get_object()
+
+        try:
+            self.service.delete_rule(rule)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def execute(self, request, organization_slug=None, workflow_pk=None, pk=None):
+        '''Manually execute a rule (for testing)'''
+        rule = self.get_object()
+        trigger_data = request.data.get('trigger_data', {})
+
+        try:
+            executed = self.service.execute_rules(
+                rule.workflow, rule.trigger_type, trigger_data
+            )
+
+            return Response(
+                {
+                    'message': 'Rule executed successfully',
+                    'executed_count': len(executed),
+                }
+            )
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)

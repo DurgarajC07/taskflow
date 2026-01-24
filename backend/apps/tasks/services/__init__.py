@@ -1,5 +1,5 @@
 """
-Team, Project, and Task Services
+Team, Project, Task, and Workflow Services
 """
 
 from .team_service import TeamService
@@ -8,6 +8,12 @@ from .project_service import ProjectService
 from .project_member_service import ProjectMemberService
 from .task_service import TaskService
 from .task_comment_service import TaskCommentService
+from .workflow_service import (
+    WorkflowService,
+    WorkflowStateService,
+    WorkflowTransitionService,
+    WorkflowRuleService,
+)
 
 __all__ = [
     "TeamService",
@@ -16,4 +22,8 @@ __all__ = [
     "ProjectMemberService",
     "TaskService",
     "TaskCommentService",
+    "WorkflowService",
+    "WorkflowStateService",
+    "WorkflowTransitionService",
+    "WorkflowRuleService",
 ]

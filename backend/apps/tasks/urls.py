@@ -1,6 +1,6 @@
 """
-Team, Project, and Task URLs
-URL routing for team, project, and task API endpoints.
+Team, Project, Task, and Workflow URLs
+URL routing for team, project, task, and workflow API endpoints.
 """
 
 from django.urls import path, include
@@ -13,6 +13,10 @@ from apps.tasks.views import (
     TaskViewSet,
     TaskCommentViewSet,
     TaskAttachmentViewSet,
+    WorkflowViewSet,
+    WorkflowStateViewSet,
+    WorkflowTransitionViewSet,
+    WorkflowRuleViewSet,
 )
 
 app_name = "tasks"
@@ -47,4 +51,25 @@ tasks_router.register(
     basename="task-attachment",
 )
 
-urlpatterns = teams_router.urls + projects_router.urls + tasks_router.urls
+# Router for workflows
+workflows_router = DefaultRouter()
+workflows_router.register(r"workflows", WorkflowViewSet, basename="workflow")
+workflows_router.register(
+    r"workflows/(?P<workflow_pk>[^/.]+)/states",
+    WorkflowStateViewSet,
+    basename="workflow-state",
+)
+workflows_router.register(
+    r"workflows/(?P<workflow_pk>[^/.]+)/transitions",
+    WorkflowTransitionViewSet,
+    basename="workflow-transition",
+)
+workflows_router.register(
+    r"workflows/(?P<workflow_pk>[^/.]+)/rules",
+    WorkflowRuleViewSet,
+    basename="workflow-rule",
+)
+
+urlpatterns = (
+    teams_router.urls + projects_router.urls + tasks_router.urls + workflows_router.urls
+)
