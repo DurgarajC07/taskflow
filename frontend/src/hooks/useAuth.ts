@@ -66,3 +66,15 @@ export const useAuth = () => {
     registerError: registerMutation.error,
   };
 };
+
+// Hook to get current user
+export const useCurrentUser = () => {
+  const { isAuthenticated } = useAuthStore();
+
+  return useQuery({
+    queryKey: ['currentUser'],
+    queryFn: authService.getProfile,
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};

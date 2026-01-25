@@ -15,6 +15,27 @@ from .workflow_repository import (
     WorkflowTransitionRepository,
     WorkflowRuleRepository,
 )
+from .collaboration_repository import TaskReactionRepository, MentionRepository
+from .time_tracking_repository import TimeEntryRepository, WorkLogRepository
+from .agile_repository import (
+    SprintRepository,
+    SprintTaskRepository,
+    BacklogRepository,
+    BacklogItemRepository,
+)
+from .label_tag_repository import (
+    LabelRepository,
+    TagRepository,
+    SavedFilterRepository,
+    CustomViewRepository,
+)
+from .automation_repository import (
+    AutomationRepository,
+    AutomationLogRepository,
+    WebhookRepository,
+    WebhookDeliveryRepository,
+    ApiKeyRepository,
+)
 
 __all__ = [
     "TeamRepository",
@@ -28,4 +49,21 @@ __all__ = [
     "WorkflowStateRepository",
     "WorkflowTransitionRepository",
     "WorkflowRuleRepository",
+    "TaskReactionRepository",
+    "MentionRepository",
+    "TimeEntryRepository",
+    "WorkLogRepository",
+    "SprintRepository",
+    "SprintTaskRepository",
+    "BacklogRepository",
+    "BacklogItemRepository",
+    "LabelRepository",
+    "TagRepository",
+    "SavedFilterRepository",
+    "CustomViewRepository",
+    "AutomationRepository",
+    "AutomationLogRepository",
+    "WebhookRepository",
+    "WebhookDeliveryRepository",
+    "ApiKeyRepository",
 ]

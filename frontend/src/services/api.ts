@@ -65,4 +65,42 @@ api.interceptors.response.use(
   }
 );
 
+// Re-export services from api/index.ts
+export { 
+  authService,
+  taskService,
+  projectService,
+  teamService,
+  sprintService,
+  notificationService,
+  organizationService,
+  apiClient
+} from './api/index';
+
+// Re-export types
+export type {
+  PaginatedResponse,
+  QueryParams,
+  User,
+  Organization,
+  LoginCredentials,
+  RegisterData,
+  AuthResponse,
+  Task,
+  TaskComment,
+  TaskReaction,
+  TimeEntry,
+  TaskStatus,
+  Project,
+  ProjectMember,
+  Label,
+  Team,
+  TeamMember,
+  Sprint,
+  SprintTask,
+  Notification,
+  NotificationPreference,
+  OrganizationMember
+} from './api/index';
+
 export default api;
