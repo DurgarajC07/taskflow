@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import Sidebar from '@/components/ui/Sidebar';
-import Header from '@/components/ui/Header';
+import { Sidebar } from '@/components/ui/Sidebar';
+import { Header } from '@/components/ui/Header';
 
 interface MainLayoutProps {
   children: React.ReactNode;

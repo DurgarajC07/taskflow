@@ -6,34 +6,33 @@ interface ProjectCardProps {
   id: string;
   name: string;
   description?: string;
-  status: 'active' | 'on-hold' | 'completed';
-  progress: number;
-  members: Array<{ id: string; name: string; avatar?: string }>;
-  tasksTotal: number;
-  tasksCompleted: number;
-  dueDate?: string;
+  status: 'planning' | 'active' | 'on_hold' | 'completed' | 'archived';
+  progress?: number;
+  team?: any;
+  start_date?: string;
+  end_date?: string;
   onClick?: () => void;
   className?: string;
 }
 
 const ProjectCard: React.FC<ProjectCardProps> = ({
-  _id,
   name,
   description,
   status,
-  progress,
-  members,
-  tasksTotal,
-  tasksCompleted,
-  dueDate,
+  progress = 0,
+  end_date,
   onClick,
   className,
 }) => {
-  const statusColors = {
-    active: 'success',
-    'on-hold': 'warning',
-    completed: 'info',
-  } as const;
+  const statusMap = {
+    planning: { label: 'Planning', variant: 'default' as const },
+    active: { label: 'Active', variant: 'success' as const },
+    on_hold: { label: 'On Hold', variant: 'warning' as const },
+    completed: { label: 'Completed', variant: 'info' as const },
+    archived: { label: 'Archived', variant: 'default' as const },
+  };
+
+  const statusInfo = statusMap[status] || statusMap.planning;
 
   return (
     <Card
@@ -47,8 +46,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-gray-900 mb-1">{name}</h3>
-          <Badge variant={statusColors[status]} size="sm">
-            {status}
+          <Badge variant={statusInfo.variant} size="sm">
+            {statusInfo.label}
           </Badge>
         </div>
         <button
@@ -68,57 +67,31 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
       )}
 
       {/* Progress Bar */}
-      <div className="mb-4">
-        <div className="flex items-center justify-between text-sm mb-2">
-          <span className="text-gray-600">Progress</span>
-          <span className="font-medium text-gray-900">{progress}%</span>
+      {progress > 0 && (
+        <div className="mb-4">
+          <div className="flex items-center justify-between text-sm mb-2">
+            <span className="text-gray-600">Progress</span>
+            <span className="font-medium text-gray-900">{progress}%</span>
+          </div>
+          <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-600 rounded-full transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
-        <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-blue-600 rounded-full transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-100">
-        <div className="flex items-center gap-2 text-sm">
-          <CheckCircle className="w-4 h-4 text-gray-500" />
-          <span className="text-gray-600">
-            {tasksCompleted}/{tasksTotal} Tasks
-          </span>
-        </div>
-        {dueDate && (
-          <div className="flex items-center gap-2 text-sm">
+      <div className="flex items-center gap-4 text-sm">
+        {end_date && (
+          <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-gray-500" />
-            <span className="text-gray-600">{dueDate}</span>
+            <span className="text-gray-600">
+              {new Date(end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </span>
           </div>
         )}
-      </div>
-
-      {/* Footer - Team Members */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-gray-500" />
-          <span className="text-sm text-gray-600">{members.length} members</span>
-        </div>
-        <div className="flex -space-x-2">
-          {members.slice(0, 5).map((member) => (
-            <Avatar
-              key={member.id}
-              src={member.avatar}
-              name={member.name}
-              size="sm"
-              className="ring-2 ring-white"
-            />
-          ))}
-          {members.length > 5 && (
-            <div className="w-8 h-8 rounded-full bg-gray-200 ring-2 ring-white flex items-center justify-center text-xs font-medium text-gray-600">
-              +{members.length - 5}
-            </div>
-          )}
-        </div>
       </div>
     </Card>
   );
