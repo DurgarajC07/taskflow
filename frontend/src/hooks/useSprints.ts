@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sprintService, type QueryParams } from '@/services/api';
-import type { Sprint, SprintTask } from '@/services/api/sprints';
+import type { Sprint } from '@/services/api/sprints';
 
 export const sprintKeys = {
   all: ['sprints'] as const,

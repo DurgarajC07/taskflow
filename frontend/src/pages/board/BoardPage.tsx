@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Plus, Filter, Search } from 'lucide-react';
 import { MainLayout } from '@/components/layout';
-import { Button, Input, Select, Loading, Modal } from '@/components/ui';
+import { Button, Input, Loading, Modal } from '@/components/ui';
 import { KanbanBoard } from '@/components/features';
 import { useTasks, useUpdateTask, useCreateTask } from '@/hooks';
 import type { Task } from '@/services/api/tasks';

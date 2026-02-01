@@ -1,5 +1,5 @@
-import { Users, Calendar, CheckCircle, MoreVertical } from 'lucide-react';
-import { Card, Avatar, Badge } from '@/components/ui';
+import { Calendar, MoreVertical } from 'lucide-react';
+import { Card, Badge } from '@/components/ui';
 import { cn } from '@/lib/utils';
 
 interface ProjectCardProps {

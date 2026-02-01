@@ -1,5 +1,6 @@
 import { BaseAPIService } from './base';
-import apiClient from './base';
+import apiClient, { type PaginatedResponse } from './base';
+import type { Project as FeatureProject, CreateProjectInput, UpdateProjectInput } from '../../features/projects/types';
 
 export interface Project {
   id: string;
@@ -103,3 +104,69 @@ class ProjectService extends BaseAPIService<Project> {
 }
 
 export const projectService = new ProjectService();
+
+// New API client for feature slice
+class ProjectsAPI {
+  private baseUrl = '/projects';
+
+  async getAll(organizationId?: string): Promise<FeatureProject[]> {
+    const params: any = {};
+    if (organizationId) {
+      params.organization = organizationId;
+    }
+    const response = await apiClient.get<PaginatedResponse<any>>(`${this.baseUrl}/`, { params });
+    return response.data.results.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      key: p.key || p.name.substring(0, 3).toUpperCase(),
+      description: p.description,
+      status: p.status,
+      priority: p.priority || 'medium',
+      progress: p.progress || 0,
+      visibility: p.visibility || 'private',
+      lead: p.created_by,
+      memberCount: p.member_count || 0,
+      taskCount: p.task_count || 0,
+      completedTaskCount: p.completed_task_count || 0,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    }));
+  }
+
+  async getById(id: string): Promise<FeatureProject> {
+    const response = await apiClient.get<any>(`${this.baseUrl}/${id}/`);
+    const p = response.data;
+    return {
+      id: p.id,
+      name: p.name,
+      key: p.key || p.name.substring(0, 3).toUpperCase(),
+      description: p.description,
+      status: p.status,
+      priority: p.priority || 'medium',
+      progress: p.progress || 0,
+      visibility: p.visibility || 'private',
+      lead: p.created_by,
+      memberCount: p.member_count || 0,
+      taskCount: p.task_count || 0,
+      completedTaskCount: p.completed_task_count || 0,
+      createdAt: p.created_at,
+      updatedAt: p.updated_at,
+    };
+  }
+
+  async create(data: CreateProjectInput): Promise<FeatureProject> {
+    const response = await apiClient.post<any>(`${this.baseUrl}/`, data);
+    return this.getById(response.data.id);
+  }
+
+  async update(id: string, data: Partial<UpdateProjectInput>): Promise<FeatureProject> {
+    const response = await apiClient.patch<any>(`${this.baseUrl}/${id}/`, data);
+    return this.getById(response.data.id);
+  }
+
+  async delete(id: string): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/${id}/`);
+  }
+}
+
+export const projectsAPI = new ProjectsAPI();

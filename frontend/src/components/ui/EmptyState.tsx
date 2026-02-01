@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { Button } from './Button';
+import { Button } from './button';
 
 interface EmptyStateProps {
   icon?: LucideIcon;
@@ -34,7 +34,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       {(actionLabel || secondaryActionLabel) && (
         <div className="flex gap-3">
           {actionLabel && onAction && (
-            <Button variant="primary" onClick={onAction}>
+            <Button onClick={onAction}>
               {actionLabel}
             </Button>
           )}

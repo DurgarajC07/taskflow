@@ -155,3 +155,75 @@ class TaskService extends BaseAPIService<Task> {
 }
 
 export const taskService = new TaskService();
+
+// New API client for feature slice
+class TasksAPI {
+  private baseUrl = '/tasks';
+
+  async getAll(filters?: TaskFilters): Promise<FeatureTask[]> {
+    const params: any = {};
+    if (filters?.projectId) params.project = filters.projectId;
+    if (filters?.statusId) params.status = filters.statusId;
+    if (filters?.assigneeId) params.assignee = filters.assigneeId;
+    if (filters?.search) params.search = filters.search;
+    
+    const response = await apiClient.get<PaginatedResponse<any>>(`${this.baseUrl}/`, { params });
+    return response.data.results.map((t: any) => this.mapTask(t));
+  }
+
+  async getById(id: string): Promise<FeatureTask> {
+    const response = await apiClient.get<any>(`${this.baseUrl}/${id}/`);
+    return this.mapTask(response.data);
+  }
+
+  async create(data: CreateTaskInput): Promise<FeatureTask> {
+    const response = await apiClient.post<any>(`${this.baseUrl}/`, data);
+    return this.getById(response.data.id);
+  }
+
+  async update(id: string, data: Partial<UpdateTaskInput>): Promise<FeatureTask> {
+    const response = await apiClient.patch<any>(`${this.baseUrl}/${id}/`, data);
+    return this.getById(response.data.id);
+  }
+
+  async delete(id: string): Promise<void> {
+    await apiClient.delete(`${this.baseUrl}/${id}/`);
+  }
+
+  private mapTask(t: any): FeatureTask {
+    return {
+      id: t.id,
+      projectId: t.project,
+      sectionId: t.section,
+      parentTaskId: t.parent_task,
+      taskNumber: t.task_number,
+      taskKey: t.task_key || `TASK-${t.task_number}`,
+      title: t.title,
+      description: t.description,
+      type: t.type || 'task',
+      status: typeof t.status === 'object' ? t.status : { id: t.status, name: 'Unknown', type: 'todo', color: '#gray' },
+      priority: t.priority || 'medium',
+      severity: t.severity,
+      storyPoints: t.story_points,
+      timeEstimate: t.time_estimate,
+      timeLogged: t.time_logged || 0,
+      reporter: t.reporter || { id: '', name: 'Unknown', email: '' },
+      assignee: t.assignee,
+      dueDate: t.due_date,
+      startDate: t.start_date,
+      completedAt: t.completed_at,
+      labels: t.labels || [],
+      attachmentsCount: t.attachments_count || 0,
+      commentsCount: t.comments_count || 0,
+      subtasksCount: t.subtasks_count || 0,
+      watchersCount: t.watchers_count || 0,
+      isArchived: t.is_archived || false,
+      isBlocked: t.is_blocked || false,
+      blockingReason: t.blocking_reason,
+      createdAt: t.created_at,
+      updatedAt: t.updated_at,
+    };
+  }
+}
+
+export const tasksAPI = new TasksAPI();
